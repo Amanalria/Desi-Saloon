@@ -1,0 +1,17 @@
+{
+  "short_name": "Desi Saloon",
+  "name": "देसी सैलून — Desi Saloon",
+  "description": "Indian barber shop vibes. Multi-page desi music player.",
+  "start_url": "/",
+  "display": "fullscreen",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ]
+}
