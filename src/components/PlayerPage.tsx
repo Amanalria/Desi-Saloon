@@ -1,7 +1,20 @@
+import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 import { TopBar } from "./TopBar";
-import { MusicPlayer } from "./MusicPlayer";
+import { MusicPlayer, type PlayerQueue } from "./MusicPlayer";
+import { SettingsPanel } from "./SettingsPanel";
+import {
+  DEFAULT_SOURCE,
+  getStoredActivePlaylist,
+  getStoredPlaylists,
+  getStoredSource,
+  storeActivePlaylist,
+  storePlaylists,
+  storeSource,
+  type AudioSource,
+  type UserPlaylist,
+} from "../lib/audio-source";
 
 const pages = [
   { to: "/", label: "पुराने गाने", playlistId: "PLAI9mVohmMrk" },
@@ -21,10 +34,62 @@ export function PlayerPage({
   const prevIndex = (currentIndex - 1 + pages.length) % pages.length;
   const nextIndex = (currentIndex + 1) % pages.length;
 
-  return (
-    <div className="bg-desi fixed inset-0 overflow-hidden">
-      <TopBar playlistName={playlistName} />
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [arrowAnimating, setArrowAnimating] = useState(false);
+  const [source, setSource] = useState<AudioSource>(DEFAULT_SOURCE);
+  const [playlists, setPlaylists] = useState<UserPlaylist[]>([]);
+  const [activePlaylistId, setActivePlaylistId] = useState("");
+  const [queue, setQueue] = useState<PlayerQueue | null>(null);
 
+  useEffect(() => {
+    setSource(getStoredSource());
+    const stored = getStoredPlaylists();
+    setPlaylists(stored);
+    const active = getStoredActivePlaylist();
+    setActivePlaylistId(active || stored[0]?.id || "");
+  }, []);
+
+  useEffect(() => {
+    const prevent = (e: Event) => e.preventDefault();
+    document.addEventListener("contextmenu", prevent);
+    document.addEventListener("dragstart", prevent);
+    return () => {
+      document.removeEventListener("contextmenu", prevent);
+      document.removeEventListener("dragstart", prevent);
+    };
+  }, []);
+
+  const handleQueue = useCallback((q: PlayerQueue) => setQueue(q), []);
+
+  const handleSourceChange = (s: AudioSource) => {
+    setSource(s);
+    storeSource(s);
+  };
+
+  const handlePlaylistsChange = (list: UserPlaylist[]) => {
+    setPlaylists(list);
+    storePlaylists(list);
+    if (!list.some((p) => p.id === activePlaylistId)) {
+      const next = list[0]?.id ?? "";
+      setActivePlaylistId(next);
+      storeActivePlaylist(next);
+    }
+  };
+
+  const handleActivePlaylist = (id: string) => {
+    setActivePlaylistId(id);
+    storeActivePlaylist(id);
+  };
+
+  const openSettings = () => {
+    setArrowAnimating(true);
+    setSettingsOpen(true);
+    setTimeout(() => setArrowAnimating(false), 600);
+  };
+
+  return (
+    <div className="bg-desi fixed inset-0 overflow-hidden select-none">
+      <TopBar playlistName={playlistName} />
 
       <Link
         to={pages[prevIndex]?.to ?? "/"}
@@ -47,9 +112,26 @@ export function PlayerPage({
         सैलून
       </h1>
 
-      <div className="absolute bottom-0 left-0 right-0 z-30 w-full px-3 pb-5 sm:pb-6">
+      <div
+        className="absolute bottom-0 left-0 right-0 z-30 w-full px-3"
+        style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
+      >
         <div className="mx-auto w-full max-w-lg">
-          <MusicPlayer playlistId={playlistId} />
+          <div className="mb-2 flex items-center justify-center">
+            <button
+              onClick={openSettings}
+              className={`settings-arrow ${arrowAnimating ? "settings-arrow-bounce" : ""}`}
+              aria-label="Open settings"
+            >
+              <ChevronUp className="h-5 w-5" strokeWidth={2.25} />
+            </button>
+          </div>
+          <MusicPlayer
+            playlistId={playlistId}
+            source={source}
+            userPlaylistId={activePlaylistId}
+            onQueue={handleQueue}
+          />
 
           <div className="mt-3 flex items-center justify-center gap-3">
             {pages.map((p, i) => (
@@ -80,7 +162,17 @@ export function PlayerPage({
         </div>
       </div>
 
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        source={source}
+        onSourceChange={handleSourceChange}
+        playlists={playlists}
+        onPlaylistsChange={handlePlaylistsChange}
+        activePlaylistId={activePlaylistId}
+        onActivePlaylistChange={handleActivePlaylist}
+        queue={queue}
+      />
     </div>
   );
 }
-

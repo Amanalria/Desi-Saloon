@@ -1,5 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, Pause, SkipBack, SkipForward } from "lucide-react";
+import {
+  fetchYoutubeTitle,
+  type AudioSource,
+  type QueueTrack,
+} from "../lib/audio-source";
+
 
 interface YouTubePlayer {
   playVideo: () => void;
@@ -12,7 +18,11 @@ interface YouTubePlayer {
   getPlayerState: () => number;
   getVideoData: () => { title?: string; video_id?: string; author?: string };
   destroy: () => void;
+  getPlaylist: () => string[] | null;
   getPlaylistIndex: () => number;
+  playVideoAt: (index: number) => void;
+  loadPlaylist: (options: { list: string; listType: string; index?: number }) => void;
+  setPlaybackQuality: (quality: string) => void;
 }
 
 declare global {
@@ -39,10 +49,24 @@ declare global {
 }
 
 const PLAYING = 1;
-const PAUSED = 2;
-const ENDED = 0;
 
-export function MusicPlayer({ playlistId }: { playlistId: string }) {
+export interface PlayerQueue {
+  tracks: QueueTrack[];
+  index: number;
+  playAt: (index: number) => void;
+}
+
+export function MusicPlayer({
+  playlistId,
+  source,
+  userPlaylistId,
+  onQueue,
+}: {
+  playlistId: string;
+  source: AudioSource;
+  userPlaylistId: string;
+  onQueue?: (queue: PlayerQueue) => void;
+}) {
   const [player, setPlayer] = useState<YouTubePlayer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -51,6 +75,62 @@ export function MusicPlayer({ playlistId }: { playlistId: string }) {
   const [videoId, setVideoId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const apiLoadedRef = useRef(false);
+  const onQueueRef = useRef(onQueue);
+  onQueueRef.current = onQueue;
+
+
+  const publishQueue = useCallback((p: YouTubePlayer) => {
+    let ids: string[] = [];
+    try {
+      ids = p.getPlaylist() ?? [];
+    } catch {
+      ids = [];
+    }
+    const index = (() => {
+      try {
+        return p.getPlaylistIndex();
+      } catch {
+        return 0;
+      }
+    })();
+    const tracks: QueueTrack[] = ids.slice(0, 60).map((id, i) => ({
+      id,
+      title: `Track ${i + 1}`,
+    }));
+    onQueueRef.current?.({
+      tracks,
+      index,
+      playAt: (i: number) => {
+        try {
+          p.playVideoAt(i);
+        } catch {
+          // ignore
+        }
+      },
+    });
+    // Resolve real titles in the background
+    void Promise.all(
+      tracks.map((t, i) => fetchYoutubeTitle(t.id, `Track ${i + 1}`)),
+    ).then((titles) => {
+      onQueueRef.current?.({
+        tracks: tracks.map((t, i) => ({ ...t, title: titles[i] ?? t.title })),
+        index: (() => {
+          try {
+            return p.getPlaylistIndex();
+          } catch {
+            return index;
+          }
+        })(),
+        playAt: (i: number) => {
+          try {
+            p.playVideoAt(i);
+          } catch {
+            // ignore
+          }
+        },
+      });
+    });
+  }, []);
 
   useEffect(() => {
     if (apiLoadedRef.current) return;
@@ -67,13 +147,12 @@ export function MusicPlayer({ playlistId }: { playlistId: string }) {
       }
     }
 
-
     const initPlayer = () => {
       if (!window.YT || !containerRef.current) return;
       const playerId = `youtube-player-${playlistId}`;
       containerRef.current.id = playerId;
 
-      const newPlayer = new window.YT.Player(playerId, {
+      new window.YT.Player(playerId, {
         playerVars: {
           listType: "playlist",
           list: playlistId,
@@ -83,6 +162,7 @@ export function MusicPlayer({ playlistId }: { playlistId: string }) {
           rel: 0,
           showinfo: 0,
           modestbranding: 1,
+          vq: "tiny",
         },
 
         events: {
@@ -91,6 +171,7 @@ export function MusicPlayer({ playlistId }: { playlistId: string }) {
             setDuration(event.target.getDuration() || 0);
             updateMetadata(event.target);
             try {
+              event.target.setPlaybackQuality("tiny");
               event.target.playVideo();
             } catch {
               // autoplay may be blocked until user interaction
@@ -101,6 +182,7 @@ export function MusicPlayer({ playlistId }: { playlistId: string }) {
             setIsPlaying(event.data === PLAYING);
             setDuration(event.target.getDuration() || 0);
             updateMetadata(event.target);
+            publishQueue(event.target);
           },
         },
       });
@@ -115,22 +197,28 @@ export function MusicPlayer({ playlistId }: { playlistId: string }) {
     if (window.YT && window.YT.Player) {
       initPlayer();
     }
+  }, [playlistId, publishQueue]);
 
-    return () => {
-      try {
-        player?.destroy?.();
-      } catch {
-        // ignore
-      }
-    };
-  }, [playlistId]);
-
+  // Switch YouTube playlist when the source changes
   useEffect(() => {
     if (!player) return;
+    const targetList =
+      source === "my-youtube" && userPlaylistId ? userPlaylistId : playlistId;
+    try {
+      player.loadPlaylist({ list: targetList, listType: "playlist", index: 0 });
+      player.setPlaybackQuality("tiny");
+    } catch {
+      // ignore
+    }
+  }, [player, source, userPlaylistId, playlistId]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       try {
-        setCurrentTime(player.getCurrentTime() || 0);
-        setDuration(player.getDuration() || 0);
+        if (player) {
+          setCurrentTime(player.getCurrentTime() || 0);
+          setDuration(player.getDuration() || 0);
+        }
       } catch {
         // player may not be ready
       }
@@ -155,19 +243,20 @@ export function MusicPlayer({ playlistId }: { playlistId: string }) {
   }
 
   function handleSeek(e: React.MouseEvent<HTMLDivElement>) {
-    if (!player || !duration) return;
+    if (!duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
-    player.seekTo(ratio * duration, true);
+    player?.seekTo(ratio * duration, true);
   }
+
 
   const thumbnail = videoId
     ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
     : null;
 
-
   const progress = duration ? (currentTime / duration) * 100 : 0;
   const artist = "Desi Saloon";
+
 
   return (
     <div className="glass-pill mx-auto flex w-full max-w-md items-center gap-3 rounded-full p-3 pr-4 animate-fade-in">

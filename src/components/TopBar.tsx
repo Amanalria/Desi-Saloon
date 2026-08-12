@@ -28,7 +28,10 @@ export function TopBar({ playlistName }: { playlistName: string }) {
   }, []);
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-5 py-4 text-sm font-medium text-white text-shadow-sm">
+    <header
+      className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-5 pb-4 text-sm font-medium text-white text-shadow-sm"
+      style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
+    >
       <span className="font-sans tabular-nums tracking-wide">
         {mounted ? time : "--:--"}
       </span>
