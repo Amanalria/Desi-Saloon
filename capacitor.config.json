@@ -1,0 +1,6 @@
+{
+  "appId": "com.desisaloon.app",
+  "appName": "DesiSaloon",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
