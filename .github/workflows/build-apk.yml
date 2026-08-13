@@ -18,12 +18,13 @@ jobs:
         with:
           node-version: 18
 
-      - name: Install dependencies
+      - name: Install dependencies & build assets
         run: |
           npm install
+          npm run build
           mkdir -p dist
           cp -r .output/public/* dist/ || true
-          echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>DesiSaloon</title><link rel="stylesheet" href="/assets/styles-b4eq38ZI.css"></head><body><div id="root"></div><script type="module" src="/assets/index-CJZimjuG.js"></script></body></html>' > dist/index.html
+          echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>DesiSaloon</title><link rel="stylesheet" href="/assets/styles-b4eq38ZI.css"></head><body><div id="root"></div><script type="module" src="/assets/index-CJZimjuG.js"></script></body></html>' > dist/index.html
 
       - name: Set up Java JDK
         uses: actions/setup-java@v4
@@ -47,5 +48,5 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DesiSaloon-App-Debug.apk
+          name: DesiSaloon-App-Debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
