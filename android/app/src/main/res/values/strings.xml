@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DesiSaloon</string>
+    <string name="title_activity_main">DesiSaloon</string>
+    <string name="package_name">com.desisaloon.app</string>
+    <string name="custom_url_scheme">com.desisaloon.app</string>
+</resources>
