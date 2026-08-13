@@ -13,15 +13,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 18
+          bun-version: latest
 
       - name: Install dependencies & build assets
         run: |
-          npm install
-          npm run build
+          bun install
+          bun run build
           mkdir -p dist
           cp -r .output/public/* dist/ || true
           echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>DesiSaloon</title><link rel="stylesheet" href="/assets/styles-b4eq38ZI.css"></head><body><div id="root"></div><script type="module" src="/assets/index-CJZimjuG.js"></script></body></html>' > dist/index.html
@@ -37,7 +37,7 @@ jobs:
 
       - name: Sync Capacitor Android
         run: |
-          npx @capacitor/cli sync android
+          bunx @capacitor/cli sync android
 
       - name: Build APK with Gradle
         run: |
