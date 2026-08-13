@@ -2,29 +2,50 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  build:
+  build-apk:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - run: npm install --legacy-peer-deps
-      - run: npm run build
-      - uses: actions/setup-java@v4
+          node-version: 18
+
+      - name: Install dependencies
+        run: |
+          npm install
+          mkdir -p dist
+          cp -r .output/public/* dist/ || true
+          echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>DesiSaloon</title><link rel="stylesheet" href="/assets/styles-b4eq38ZI.css"></head><body><div id="root"></div><script type="module" src="/assets/index-CJZimjuG.js"></script></body></html>' > dist/index.html
+
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
           java-version: '17'
-      - run: npm install @capacitor/core @capacitor/cli @capacitor/android
-      - run: npx cap init "DesiSaloon" "com.desisaloon.app" --web-dir dist || true
-      - run: npx cap add android || true
-      - run: npx cap sync android || true
-      - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
-      - uses: actions/upload-artifact@v4
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Sync Capacitor Android
+        run: |
+          npx @capacitor/cli sync android
+
+      - name: Build APK with Gradle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: DesiSaloon-APK
+          name: DesiSaloon-App-Debug.apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
